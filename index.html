@@ -157,14 +157,11 @@
   </div>
 
   <script>
-    // ==========================================
-    // TODO: ใส่ Config Firebase ของคุณที่นี่
-    // ==========================================
+    // Config Firebase ของคุณที่เตรียมไว้ให้แล้ว
     const firebaseConfig = {
       apiKey: "AIzaSyBqQbM2GSAqcVyZooORwLqzGE380QAGWTo",
       authDomain: "grill-meat.firebaseapp.com",
-      // บรรทัดด้านล่างนี้ผมเติมให้ เพราะในรูปมันมักจะบัคไม่ยอมโชว์ให้ครับ
-      databaseURL: "https://grill-meat-default-rtdb.asia-southeast1.firebasedatabase.app", 
+      databaseURL: "https://grill-meat-default-rtdb.asia-southeast1.firebasedatabase.app",
       projectId: "grill-meat",
       storageBucket: "grill-meat.firebasestorage.app",
       messagingSenderId: "209813792493",
@@ -178,7 +175,7 @@
     }
     const db = firebase.database();
 
-    // URL Web App จาก Google Apps Script (ส่งยอดจริง)
+    // URL Web App จาก Google Apps Script
     const API_URL = "https://script.google.com/macros/s/AKfycbzvSJjBT4c2Jsl0U0UYynYkE5J1eFR6h1OHMzACtE0dAq8VPGJHWUWan4fkSQnea_5V/exec";
 
     // ฐานข้อมูลตัวเลือก
@@ -218,16 +215,12 @@
       onDateChange();
     }
 
-    // ดึงข้อมูล (จะเช็คจาก Firebase ก่อน ถ้าไม่มีค่อยไปถาม Google Sheet)
+    // ดึงข้อมูล
     function fetchDateData(dateStr) {
       showLoading(true);
-      
-      // ดึงจาก Firebase (Draft)
       db.ref('drafts/' + dateStr).once('value').then((snapshot) => {
         const draft = snapshot.val();
-        
         if (draft) {
-          // ถ้ามี draft ใน Firebase ให้โหลดขึ้นมาเลย (เร็วมาก)
           renderData(draft);
           showLoading(false);
           if (draft.isSubmitted) {
@@ -236,14 +229,12 @@
             document.getElementById('lockScreen').classList.add('hidden');
           }
         } else {
-          // ถ้าไม่มี ให้วิ่งไปดึงจาก GAS เผื่อเคยทำส่งไว้
           fetch(`${API_URL}?action=getData&date=${dateStr}`)
             .then(res => res.json())
             .then(response => {
               showLoading(false);
               if (response && response.success) {
                 renderData(response.data);
-                // เช็คประวัติการส่ง
                 if (localStorage.getItem("submitted_" + dateStr) === "true") {
                   document.getElementById('lockScreen').classList.remove('hidden');
                 } else {
@@ -255,7 +246,6 @@
       });
     }
 
-    // นำข้อมูลลงหน้าจอ
     function renderData(data) {
       document.getElementById('cashInput').value = data.incomeCash || data.cash || '';
       document.getElementById('transferInput').value = data.incomeTransfer || data.transfer || '';
@@ -270,7 +260,6 @@
       }
     }
 
-    // เพิ่มบรรทัดรายจ่าย (เปลี่ยนใช้ onchange แทน onblur เพื่อลดรอบการเซฟ)
     function addExpenseRow(name = "", amount = "", unit = "", price = "") {
       const container = document.getElementById('expenseList');
       const rowId = "row_" + Date.now() + Math.floor(Math.random() * 100);
@@ -358,7 +347,6 @@
         document.getElementById('expenseList').innerHTML = '';
         addExpenseRow();
         
-        // ลบ Draft ออกจาก Firebase ด้วย
         const dateStr = document.getElementById('dateInput').value;
         db.ref('drafts/' + dateStr).remove();
       }
@@ -379,19 +367,16 @@
       return { dateStr, cash, transfer, expenses };
     }
 
-    // บันทึก Draft ลง Firebase อย่างรวดเร็ว
     function saveDraftToFirebase() {
       const data = gatherData();
       if (!data.dateStr) return;
       
-      // ดึงสถานะปัจจุบันมาเช็คก่อน ถ้าล็อกอยู่จะไม่ให้เซฟทับมั่วๆ
       const isLocked = !document.getElementById('lockScreen').classList.contains('hidden');
       data.isSubmitted = isLocked;
       
       db.ref('drafts/' + data.dateStr).set(data);
     }
 
-    // ส่งยอดเข้า Google Sheet และอัปเดตสถานะใน Firebase เป็น Submitted
     function submitAllData() {
       const data = gatherData();
       if (!data.dateStr) return alert("กรุณาเลือกวันที่ก่อนบันทึก");
@@ -406,7 +391,6 @@
       .then(res => {
         showLoading(false);
         if (res.success) {
-          // ส่งสำเร็จ ล็อคหน้าจอ และอัปเดตลง Firebase ว่าส่งแล้ว
           localStorage.setItem("submitted_" + data.dateStr, "true");
           data.isSubmitted = true;
           db.ref('drafts/' + data.dateStr).set(data);
@@ -426,7 +410,6 @@
       const dateStr = document.getElementById('dateInput').value;
       localStorage.removeItem("submitted_" + dateStr);
       
-      // ปลดล็อคใน Firebase ด้วย
       db.ref('drafts/' + dateStr).update({ isSubmitted: false });
       
       document.getElementById('lockScreen').classList.add('hidden');
