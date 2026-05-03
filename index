@@ -7,10 +7,13 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
   <style>
     :root {
-      --main-color: #96a9ee; /* สีฟ้าตามที่อัปโหลด */
+      --main-color: #96a9ee;
       --main-color-dark: #7a8ecf;
     }
     body {
@@ -19,7 +22,7 @@
       color: #e0e0e0;
       -webkit-user-select: none;
       user-select: none;
-      overflow: hidden; /* ล็อกหน้าจอไม่ให้ขยับซ้ายขวา */
+      overflow: hidden;
       position: fixed;
       width: 100%;
       height: 100%;
@@ -28,7 +31,7 @@
       height: 100%;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      padding-bottom: 100px; /* เว้นที่ด้านล่าง */
+      padding-bottom: 100px;
     }
     .custom-card {
       background-color: #1e1e1e;
@@ -48,7 +51,6 @@
       overflow-y: auto;
       box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
-    /* อนิเมชั่นรูปไฟ (ไม่มีพื้นหลังเบลอ) */
     .fire-loading {
       position: fixed;
       top: 50%;
@@ -58,18 +60,17 @@
       font-size: 4rem;
       color: #ff5722;
       animation: fire-pulse 0.8s infinite alternate ease-in-out;
-      pointer-events: none; /* กดทะลุได้ */
+      pointer-events: none;
     }
     @keyframes fire-pulse {
       0% { transform: translate(-50%, -50%) scale(0.9); filter: drop-shadow(0 0 10px #ff9800); }
       100% { transform: translate(-50%, -50%) scale(1.2); filter: drop-shadow(0 0 25px #ff5722); }
     }
-    /* จัด Input วันที่ */
     input[type="date"]::-webkit-calendar-picker-indicator {
       filter: invert(1);
     }
     .lock-date-input::-webkit-calendar-picker-indicator {
-      filter: invert(0) !important; /* สำหรับหน้าล็อกที่พื้นหลังสว่าง */
+      filter: invert(0) !important;
     }
   </style>
 </head>
@@ -83,12 +84,10 @@
     <div class="custom-card p-8 w-full max-w-sm flex flex-col items-center text-center space-y-6">
       <i class="fa-solid fa-circle-check text-[var(--main-color)] text-6xl"></i>
       <h2 class="text-2xl font-medium text-white">ส่งข้อมูลแล้ว</h2>
-      
       <div class="w-full flex justify-center">
         <input type="date" id="lockDateInput" onchange="changeDateFromInput(this.value)"
                class="lock-date-input bg-[#e0e0e0] text-black text-center font-bold py-3 px-4 rounded-xl border-none focus:outline-none focus:ring-2 focus:ring-[var(--main-color)] w-full max-w-[200px] shadow-inner">
       </div>
-
       <button onclick="unlockForEdit()" class="w-full py-3.5 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition">
         <i class="fa-solid fa-lock-open"></i> ปลดล็อคเพื่อแก้ไข
       </button>
@@ -99,11 +98,9 @@
     <div class="custom-card p-6 w-full max-w-sm flex flex-col items-center text-center space-y-5">
       <i class="fa-solid fa-circle-check text-[var(--main-color)] text-5xl"></i>
       <h3 class="text-xl font-medium text-white" id="successText">บันทึกเรียบร้อย!</h3>
-      
       <button onclick="nextDayAction()" class="w-full py-4 bg-[var(--main-color)] hover:bg-[var(--main-color-dark)] text-black font-bold rounded-xl text-lg flex items-center justify-center gap-2 shadow-lg transition">
         <i class="fa-solid fa-calendar-plus"></i> ทำรายการวันถัดไป
       </button>
-      
       <button onclick="closeSuccessModal()" class="w-full py-2.5 bg-transparent text-gray-400 hover:text-white font-medium rounded-xl text-sm border border-gray-700 transition">
         <i class="fa-solid fa-pen-to-square"></i> แก้ไขข้อมูล
       </button>
@@ -111,7 +108,6 @@
   </div>
 
   <div class="scroll-container max-w-md mx-auto space-y-5">
-    
     <div class="custom-card p-4 flex flex-col space-y-2 shadow-sm">
       <label class="text-sm font-medium text-gray-400 flex items-center gap-2">
         <i class="fa-regular fa-calendar text-[var(--main-color)]"></i> วันที่ทำรายการ
@@ -129,12 +125,12 @@
       <div class="space-y-3">
         <div class="flex flex-col space-y-1">
           <label class="text-xs text-gray-400">เงินสด</label>
-          <input type="number" id="cashInput" onblur="saveDraftToCloud()" placeholder="กรอกยอดเงินสด"
+          <input type="number" id="cashInput" onchange="saveDraftToFirebase()" placeholder="กรอกยอดเงินสด"
                  class="w-full bg-[#2d2d2d] text-white p-3 rounded-xl border border-gray-700 focus:outline-none focus:border-[var(--main-color)] text-right font-medium text-lg">
         </div>
         <div class="flex flex-col space-y-1">
           <label class="text-xs text-gray-400">เงินโอน</label>
-          <input type="number" id="transferInput" onblur="saveDraftToCloud()" placeholder="กรอกยอดเงินโอน"
+          <input type="number" id="transferInput" onchange="saveDraftToFirebase()" placeholder="กรอกยอดเงินโอน"
                  class="w-full bg-[#2d2d2d] text-white p-3 rounded-xl border border-gray-700 focus:outline-none focus:border-[var(--main-color)] text-right font-medium text-lg">
         </div>
       </div>
@@ -144,9 +140,7 @@
       <h3 class="text-md font-semibold text-gray-200 flex items-center gap-2 border-b border-gray-800 pb-2">
         <i class="fa-solid fa-receipt text-red-400"></i> รายจ่าย
       </h3>
-
       <div id="expenseList" class="space-y-3"></div>
-
       <div class="flex flex-col gap-3 mt-4 pt-2">
         <button onclick="addExpenseRow()" class="w-full py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl border border-gray-600 text-sm font-medium flex items-center justify-center gap-2 transition shadow-sm">
           <i class="fa-solid fa-plus text-[var(--main-color)]"></i> เพิ่มบรรทัด
@@ -158,16 +152,36 @@
     </div>
 
     <button onclick="submitAllData()" class="w-full bg-[var(--main-color)] hover:bg-[var(--main-color-dark)] text-black text-lg font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg mb-8 transition">
-      🚀 บันทึกข้อมูล
+      🚀 ส่งยอดเข้า Google Sheet
     </button>
-
   </div>
 
   <script>
-    // URL Web App จาก Google Apps Script ที่คุณให้มา
+    // ==========================================
+    // TODO: ใส่ Config Firebase ของคุณที่นี่
+    // ==========================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyBqQbM2GSAqcVyZooORwLqzGE380QAGWTo",
+      authDomain: "grill-meat.firebaseapp.com",
+      // บรรทัดด้านล่างนี้ผมเติมให้ เพราะในรูปมันมักจะบัคไม่ยอมโชว์ให้ครับ
+      databaseURL: "https://grill-meat-default-rtdb.asia-southeast1.firebasedatabase.app", 
+      projectId: "grill-meat",
+      storageBucket: "grill-meat.firebasestorage.app",
+      messagingSenderId: "209813792493",
+      appId: "1:209813792493:web:463ca7210c23c7ab1ecee4",
+      measurementId: "G-J47TF1HY0F"
+    };
+    
+    // เริ่มต้นเชื่อมต่อ Firebase
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.database();
+
+    // URL Web App จาก Google Apps Script (ส่งยอดจริง)
     const API_URL = "https://script.google.com/macros/s/AKfycbzvSJjBT4c2Jsl0U0UYynYkE5J1eFR6h1OHMzACtE0dAq8VPGJHWUWan4fkSQnea_5V/exec";
 
-    // รายการฐานข้อมูล
+    // ฐานข้อมูลตัวเลือก
     const productUnits = {
       "แก๊สปิคนิค": "ถัง", "แก๊สถังใหญ่ 15 กิโล": "ถัง", "หัวแก๊สปิคนิค": "หัว", "ถุงร้อน 4.5x7 นิ้ว": "หิ้ว",
       "ถุง 5x8 นิ้ว": "หิ้ว", "ไม้เสียบ6นิ้ว": "แพ็ค", "ถุงหิ้ว 6x11": "หิ้ว", "ถุงหิ้ว 7x15": "หิ้ว",
@@ -181,10 +195,8 @@
       "ค่าเช่า ทาวน่ามาร์เก็ต", "ค่าขยะ ทาวน่ามาร์เก็ต", "ค่าไฟห้องแม๊กซ์"
     ]);
 
-    // โหลดครั้งแรกตอนเปิดเว็บ
     window.onload = function() {
       const today = new Date();
-      // จัด Format Date ตามเวลา Local ป้องกันไทม์โซนเพี้ยน
       const offset = today.getTimezoneOffset() * 60000;
       const localISOTime = (new Date(today - offset)).toISOString().split('T')[0];
       
@@ -206,41 +218,59 @@
       onDateChange();
     }
 
-    // ฟังก์ชัน Fetch ดึงข้อมูล (แทน google.script.run)
+    // ดึงข้อมูล (จะเช็คจาก Firebase ก่อน ถ้าไม่มีค่อยไปถาม Google Sheet)
     function fetchDateData(dateStr) {
       showLoading(true);
-      fetch(`${API_URL}?action=getData&date=${dateStr}`)
-        .then(res => res.json())
-        .then(response => {
+      
+      // ดึงจาก Firebase (Draft)
+      db.ref('drafts/' + dateStr).once('value').then((snapshot) => {
+        const draft = snapshot.val();
+        
+        if (draft) {
+          // ถ้ามี draft ใน Firebase ให้โหลดขึ้นมาเลย (เร็วมาก)
+          renderData(draft);
           showLoading(false);
-          if (response && response.success) {
-            document.getElementById('cashInput').value = response.data.incomeCash || '';
-            document.getElementById('transferInput').value = response.data.incomeTransfer || '';
-            
-            document.getElementById('expenseList').innerHTML = "";
-            if (response.data.expenses && response.data.expenses.length > 0) {
-              response.data.expenses.forEach(exp => {
-                addExpenseRow(exp.name, exp.amount, exp.unit, exp.price);
-              });
-            } else {
-              addExpenseRow(); // สร้างบรรทัดว่าง 1 บรรทัด
-            }
-
-            // เช็คว่าส่งข้อมูลแล้วหรือยัง
-            if (localStorage.getItem("submitted_" + dateStr) === "true") {
-              document.getElementById('lockScreen').classList.remove('hidden');
-            } else {
-              document.getElementById('lockScreen').classList.add('hidden');
-            }
+          if (draft.isSubmitted) {
+            document.getElementById('lockScreen').classList.remove('hidden');
+          } else {
+            document.getElementById('lockScreen').classList.add('hidden');
           }
-        })
-        .catch(err => {
-          showLoading(false);
-          console.error(err);
-        });
+        } else {
+          // ถ้าไม่มี ให้วิ่งไปดึงจาก GAS เผื่อเคยทำส่งไว้
+          fetch(`${API_URL}?action=getData&date=${dateStr}`)
+            .then(res => res.json())
+            .then(response => {
+              showLoading(false);
+              if (response && response.success) {
+                renderData(response.data);
+                // เช็คประวัติการส่ง
+                if (localStorage.getItem("submitted_" + dateStr) === "true") {
+                  document.getElementById('lockScreen').classList.remove('hidden');
+                } else {
+                  document.getElementById('lockScreen').classList.add('hidden');
+                }
+              }
+            }).catch(() => { showLoading(false); });
+        }
+      });
     }
 
-    // เพิ่มบรรทัดรายจ่าย (เอาปัดซ้ายออก ใส่ปุ่มลบ (X) แทน)
+    // นำข้อมูลลงหน้าจอ
+    function renderData(data) {
+      document.getElementById('cashInput').value = data.incomeCash || data.cash || '';
+      document.getElementById('transferInput').value = data.incomeTransfer || data.transfer || '';
+      document.getElementById('expenseList').innerHTML = "";
+      
+      if (data.expenses && data.expenses.length > 0) {
+        data.expenses.forEach(exp => {
+          addExpenseRow(exp.name, exp.amount, exp.unit, exp.price);
+        });
+      } else {
+        addExpenseRow();
+      }
+    }
+
+    // เพิ่มบรรทัดรายจ่าย (เปลี่ยนใช้ onchange แทน onblur เพื่อลดรอบการเซฟ)
     function addExpenseRow(name = "", amount = "", unit = "", price = "") {
       const container = document.getElementById('expenseList');
       const rowId = "row_" + Date.now() + Math.floor(Math.random() * 100);
@@ -251,20 +281,20 @@
       div.innerHTML = `
         <div class="grid grid-cols-12 gap-1 w-full">
           <div class="col-span-5 relative">
-            <input type="text" value="${name}" oninput="handleSearchDropdown(this)" onkeydown="checkNextFocus(event, this, 'amount')" onblur="saveDraftToCloud()"
+            <input type="text" value="${name}" oninput="handleSearchDropdown(this)" onkeydown="checkNextFocus(event, this, 'amount')" onchange="saveDraftToFirebase()"
                    placeholder="รายการ" class="w-full bg-[#1e1e1e] text-white px-2 py-2.5 rounded-lg border border-gray-600 focus:outline-none focus:border-[var(--main-color)] text-sm exp-name">
             <div class="dropdown-list hidden"></div>
           </div>
           <div class="col-span-2">
-            <input type="number" value="${amount}" onkeydown="checkNextFocus(event, this, 'unit')" onblur="saveDraftToCloud()"
+            <input type="number" value="${amount}" onkeydown="checkNextFocus(event, this, 'unit')" onchange="saveDraftToFirebase()"
                    placeholder="จำนวน" class="w-full bg-[#1e1e1e] text-white px-1 py-2.5 rounded-lg border border-gray-600 focus:outline-none focus:border-[var(--main-color)] text-sm text-center exp-amount">
           </div>
           <div class="col-span-2">
-            <input type="text" value="${unit}" onkeydown="checkNextFocus(event, this, 'price')" onblur="saveDraftToCloud()"
+            <input type="text" value="${unit}" onkeydown="checkNextFocus(event, this, 'price')" onchange="saveDraftToFirebase()"
                    placeholder="หน่วย" class="w-full bg-[#1e1e1e] text-white px-1 py-2.5 rounded-lg border border-gray-600 focus:outline-none focus:border-[var(--main-color)] text-sm text-center exp-unit">
           </div>
           <div class="col-span-3">
-            <input type="number" value="${price}" onkeydown="checkNextFocus(event, this, 'nextRow')" onblur="saveDraftToCloud()"
+            <input type="number" value="${price}" onkeydown="checkNextFocus(event, this, 'nextRow')" onchange="saveDraftToFirebase()"
                    placeholder="บาท" class="w-full bg-[#1e1e1e] text-white px-2 py-2.5 rounded-lg border border-gray-600 focus:outline-none focus:border-[var(--main-color)] text-sm text-right exp-price">
           </div>
         </div>
@@ -275,25 +305,17 @@
       container.appendChild(div);
     }
 
-    // ลบบรรทัดรายจ่ายทีละบรรทัด
     function removeRow(rowId) {
       document.getElementById(rowId).remove();
-      saveDraftToCloud();
+      saveDraftToFirebase();
     }
 
-    // Dropdown ค้นหา
     function handleSearchDropdown(input) {
       const dropdown = input.nextElementSibling;
       const query = input.value.trim().toLowerCase();
-      if (!query) {
-        dropdown.classList.add('hidden');
-        return;
-      }
+      if (!query) { dropdown.classList.add('hidden'); return; }
       const matched = allProducts.filter(p => p.toLowerCase().includes(query));
-      if (matched.length === 0) {
-        dropdown.classList.add('hidden');
-        return;
-      }
+      if (matched.length === 0) { dropdown.classList.add('hidden'); return; }
       dropdown.innerHTML = matched.map(m => `<div class="p-3 hover:bg-[var(--main-color)] hover:text-black cursor-pointer border-b border-gray-700 text-sm text-white" onclick="selectDropdownItem('${m}', this)">${m}</div>`).join('');
       dropdown.classList.remove('hidden');
     }
@@ -303,55 +325,45 @@
       const nameInput = dropdown.previousElementSibling;
       nameInput.value = val;
       dropdown.classList.add('hidden');
-
       const row = nameInput.closest('.flex');
       const unitInput = row.querySelector('.exp-unit');
-      if (productUnits[val]) {
-        unitInput.value = productUnits[val];
-      }
+      if (productUnits[val]) { unitInput.value = productUnits[val]; }
       
-      saveDraftToCloud();
+      saveDraftToFirebase();
       row.querySelector('.exp-amount').focus();
     }
 
-    // กด Enter เลื่อนช่อง
     function checkNextFocus(e, input, targetType) {
       if (e.key === 'Enter') {
         e.preventDefault();
         const row = input.closest('.flex');
-        if (targetType === 'amount') {
-          row.querySelector('.exp-amount').focus();
-        } else if (targetType === 'unit') {
-          row.querySelector('.exp-unit').focus();
-        } else if (targetType === 'price') {
-          row.querySelector('.exp-price').focus();
-        } else if (targetType === 'nextRow') {
+        if (targetType === 'amount') row.querySelector('.exp-amount').focus();
+        else if (targetType === 'unit') row.querySelector('.exp-unit').focus();
+        else if (targetType === 'price') row.querySelector('.exp-price').focus();
+        else if (targetType === 'nextRow') {
           const nextRowContainer = row.nextElementSibling;
-          if (nextRowContainer) {
-            nextRowContainer.querySelector('.exp-name').focus();
-          } else {
+          if (nextRowContainer) nextRowContainer.querySelector('.exp-name').focus();
+          else {
             addExpenseRow();
-            setTimeout(() => {
-              const lastRow = document.getElementById('expenseList').lastElementChild;
-              lastRow.querySelector('.exp-name').focus();
-            }, 50);
+            setTimeout(() => { document.getElementById('expenseList').lastElementChild.querySelector('.exp-name').focus(); }, 50);
           }
         }
       }
     }
 
-    // ล้างข้อมูลทั้งหมด (ปุ่มใต้ปุ่มเพิ่มบรรทัด)
     function clearAllToday() {
       if (confirm('ยืนยันล้างข้อมูลของวันนี้ทั้งหมด?')) {
         document.getElementById('cashInput').value = '';
         document.getElementById('transferInput').value = '';
         document.getElementById('expenseList').innerHTML = '';
         addExpenseRow();
-        saveDraftToCloud();
+        
+        // ลบ Draft ออกจาก Firebase ด้วย
+        const dateStr = document.getElementById('dateInput').value;
+        db.ref('drafts/' + dateStr).remove();
       }
     }
 
-    // ฟังก์ชันรวบรวมข้อมูล
     function gatherData() {
       const dateStr = document.getElementById('dateInput').value;
       const cash = document.getElementById('cashInput').value;
@@ -362,31 +374,27 @@
         const amount = row.querySelector('.exp-amount').value;
         const unit = row.querySelector('.exp-unit').value;
         const price = row.querySelector('.exp-price').value;
-        if (name || price) {
-          expenses.push({ name, amount, unit, price });
-        }
+        if (name || price) expenses.push({ name, amount, unit, price });
       });
       return { dateStr, cash, transfer, expenses };
     }
 
-    // บันทึก Draft แบบเงียบๆ (ไม่ต้องหมุนโหลด)
-    function saveDraftToCloud() {
+    // บันทึก Draft ลง Firebase อย่างรวดเร็ว
+    function saveDraftToFirebase() {
       const data = gatherData();
       if (!data.dateStr) return;
-      fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-      }).catch(e => console.log('Draft save failed silently', e));
+      
+      // ดึงสถานะปัจจุบันมาเช็คก่อน ถ้าล็อกอยู่จะไม่ให้เซฟทับมั่วๆ
+      const isLocked = !document.getElementById('lockScreen').classList.contains('hidden');
+      data.isSubmitted = isLocked;
+      
+      db.ref('drafts/' + data.dateStr).set(data);
     }
 
-    // ส่งยอดข้อมูลจริง
+    // ส่งยอดเข้า Google Sheet และอัปเดตสถานะใน Firebase เป็น Submitted
     function submitAllData() {
       const data = gatherData();
-      if (!data.dateStr) {
-        alert("กรุณาเลือกวันที่ก่อนบันทึก");
-        return;
-      }
+      if (!data.dateStr) return alert("กรุณาเลือกวันที่ก่อนบันทึก");
       
       showLoading(true);
       fetch(API_URL, {
@@ -398,7 +406,11 @@
       .then(res => {
         showLoading(false);
         if (res.success) {
+          // ส่งสำเร็จ ล็อคหน้าจอ และอัปเดตลง Firebase ว่าส่งแล้ว
           localStorage.setItem("submitted_" + data.dateStr, "true");
+          data.isSubmitted = true;
+          db.ref('drafts/' + data.dateStr).set(data);
+          
           document.getElementById('successModal').classList.remove('hidden');
         } else {
           alert('เกิดข้อผิดพลาดในการบันทึก: ' + res.error);
@@ -410,26 +422,26 @@
       });
     }
 
-    // ฟังก์ชันปลดล็อกเพื่อแก้ไข
     function unlockForEdit() {
       const dateStr = document.getElementById('dateInput').value;
       localStorage.removeItem("submitted_" + dateStr);
+      
+      // ปลดล็อคใน Firebase ด้วย
+      db.ref('drafts/' + dateStr).update({ isSubmitted: false });
+      
       document.getElementById('lockScreen').classList.add('hidden');
     }
 
     function closeSuccessModal() {
       document.getElementById('successModal').classList.add('hidden');
-      document.getElementById('lockScreen').classList.remove('hidden'); // กลับไปหน้าล็อก
+      document.getElementById('lockScreen').classList.remove('hidden');
     }
 
-    // ทำรายการวันถัดไป
     function nextDayAction() {
       document.getElementById('successModal').classList.add('hidden');
       const dateVal = document.getElementById('dateInput').value;
       const dt = new Date(dateVal);
       dt.setDate(dt.getDate() + 1);
-      
-      // หา Format กลับเป็น Local ป้องกันเพี้ยน
       const offset = dt.getTimezoneOffset() * 60000;
       const nextDateStr = (new Date(dt - offset)).toISOString().split('T')[0];
       
@@ -438,11 +450,10 @@
       fetchDateData(nextDateStr);
     }
 
-    // แสดง/ซ่อน อนิเมชั่นไฟ (ไม่มีเบลอหลัง)
     function showLoading(show) {
       const overlay = document.getElementById('loadingOverlay');
-      if (show) { overlay.classList.remove('hidden'); }
-      else { overlay.classList.add('hidden'); }
+      if (show) overlay.classList.remove('hidden');
+      else overlay.classList.add('hidden');
     }
   </script>
 </body>
