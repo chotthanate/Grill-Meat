@@ -10,21 +10,30 @@
   
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-
   <style>
     :root {
-      --primary: #4F46E5;       /* สีน้ำเงิน Indigo หลัก */
-      --primary-dark: #4338CA;
-      --bg-app: #F8FAFC;        /* พื้นหลังแอปสีสว่าง */
-      --card-bg: #FFFFFF;       /* การ์ดสีขาว */
-      --text-main: #1E293B;     /* สีข้อความหลัก */
-      --text-muted: #64748B;    /* สีข้อความรอง */
-      --border-color: #E2E8F0;  /* สีขอบ */
-      --accent: #EA580C;        /* สีส้ม (ไอคอนไฟ) */
+      --primary: #991B1B;
+      --primary-dark: #7F1D1D;
+      --primary-soft: #FFF1E7;
+      --bg-app: #050505;
+      --card-bg: #FFFDF8;
+      --text-main: #1F130F;
+      --text-muted: #7A6255;
+      --border-color: #EAD7C5;
+      --accent: #F97316;
+      --accent-dark: #C2410C;
+      --success: #15803D;
+      --danger: #DC2626;
     }
     body {
       font-family: 'Kanit', sans-serif;
       background-color: var(--bg-app);
+      background-image:
+        radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.75) 0 1px, transparent 1.7px),
+        radial-gradient(circle at 78% 24%, rgba(255, 238, 213, 0.65) 0 1px, transparent 1.6px),
+        radial-gradient(circle at 48% 72%, rgba(255, 255, 255, 0.42) 0 1px, transparent 1.5px),
+        linear-gradient(145deg, #050505 0%, #120B08 44%, #060606 100%);
+      background-size: 137px 137px, 211px 211px, 319px 319px, cover;
       color: var(--text-main);
       -webkit-user-select: none;
       user-select: none;
@@ -33,34 +42,109 @@
       width: 100%;
       height: 100%;
     }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.62)),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 7px);
+      opacity: 0.72;
+    }
     .scroll-container {
       height: 100%;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
+      padding-top: 0.4rem;
       padding-bottom: 100px;
+      position: relative;
+      z-index: 1;
     }
     .custom-card {
       background-color: var(--card-bg);
-      border: 1px solid var(--border-color);
-      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
-      border-radius: 16px;
+      border: 1px solid rgba(234, 215, 197, 0.92);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.34), 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+      border-radius: 14px;
     }
-    
-    /* Input Styles สำหรับโหมดสว่าง */
-    .input-field {
+    .custom-card h2,
+    .custom-card h3,
+    .custom-card label,
+    .custom-card .text-slate-800,
+    .custom-card .text-slate-700,
+    .custom-card .text-slate-900 {
+      color: var(--text-main) !important;
+    }
+    .custom-card .text-slate-500,
+    .custom-card .text-slate-400 {
+      color: var(--text-muted) !important;
+    }
+    .custom-card .border-slate-200,
+    .custom-card .border-slate-300 {
+      border-color: var(--border-color) !important;
+    }
+    .text-indigo-500,
+    .text-indigo-700 {
+      color: var(--accent-dark) !important;
+    }
+    .text-red-500,
+    .text-red-600 {
+      color: var(--danger) !important;
+    }
+    .text-green-500 {
+      color: var(--success) !important;
+    }
+    .bg-indigo-600 {
+      background-color: var(--primary) !important;
+      box-shadow: 0 16px 30px rgba(153, 27, 27, 0.35);
+    }
+    .hover\:bg-indigo-700:hover {
+      background-color: var(--primary-dark) !important;
+    }
+    .bg-slate-50,
+    .bg-slate-100,
+    .bg-slate-200 {
+      background-color: var(--primary-soft) !important;
+    }
+    .hover\:bg-slate-200:hover,
+    .hover\:bg-slate-300:hover {
+      background-color: #FFE5D2 !important;
+    }
+    .border-slate-100,
+    .border-slate-200,
+    .border-slate-300 {
+      border-color: var(--border-color) !important;
+    }
+
+    .input-field,
+    input[type="date"] {
       width: 100%;
-      background-color: #FFFFFF;
+      background-color: #FFF9F2;
       color: var(--text-main);
       padding: 0.75rem;
       border-radius: 0.5rem;
-      border: 1px solid #CBD5E1;
+      border: 1px solid var(--border-color);
       font-size: 0.875rem;
       transition: all 0.2s;
+      box-shadow: inset 0 1px 2px rgba(86, 41, 21, 0.08);
     }
-    .input-field:focus {
+    .input-field:focus,
+    input[type="date"]:focus {
       outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+      border-color: var(--accent);
+      background-color: #FFFFFF;
+      box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.18), inset 0 1px 2px rgba(86, 41, 21, 0.08);
+    }
+    #expenseList > div {
+      background-color: #FFF8EF !important;
+      border-color: var(--border-color) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+    }
+    #expenseList button {
+      color: #9A3412 !important;
+    }
+    #expenseList button:hover {
+      color: var(--danger) !important;
     }
 
     .dropdown-list {
@@ -69,12 +153,12 @@
       left: 0;
       right: 0;
       z-index: 50;
-      background: #FFFFFF;
+      background: #FFFDF8;
       border: 1px solid var(--border-color);
       border-radius: 8px;
       max-height: 160px;
       overflow-y: auto;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 18px 32px rgba(31, 19, 15, 0.2);
     }
     .dropdown-item {
       padding: 0.75rem;
@@ -84,8 +168,8 @@
       cursor: pointer;
     }
     .dropdown-item:hover {
-      background-color: #EEF2FF;
-      color: var(--primary);
+      background-color: var(--primary-soft);
+      color: var(--accent-dark);
     }
 
     .fire-loading {
@@ -100,8 +184,8 @@
       pointer-events: none;
     }
     @keyframes fire-pulse {
-      0% { transform: translate(-50%, -50%) scale(0.9); filter: drop-shadow(0 0 10px rgba(234, 88, 12, 0.5)); }
-      100% { transform: translate(-50%, -50%) scale(1.2); filter: drop-shadow(0 0 25px rgba(234, 88, 12, 0.8)); }
+      0% { transform: translate(-50%, -50%) scale(0.9); filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.5)); }
+      100% { transform: translate(-50%, -50%) scale(1.2); filter: drop-shadow(0 0 25px rgba(220, 38, 38, 0.8)); }
     }
   </style>
 </head>
