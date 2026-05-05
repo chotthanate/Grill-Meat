@@ -533,35 +533,90 @@
       db.ref('drafts/' + data.dateStr).set(data);
     }
 
-    function submitAllData() {
-      const data = gatherData();
-      if (!data.dateStr) return alert("กรุณาเลือกวันที่ก่อนบันทึก");
-      
-      showLoading(true);
+    function normalizeForCompare(value) {
+      return (value ?? '').toString().trim();
+    }
+
+    function sheetDataMatches(inputData, sheetData) {
+      if (!sheetData) return false;
+
+      const cashMatches = normalizeForCompare(sheetData.incomeCash || sheetData.cash) === normalizeForCompare(inputData.cash);
+      const transferMatches = normalizeForCompare(sheetData.incomeTransfer || sheetData.transfer) === normalizeForCompare(inputData.transfer);
+      const inputExpenses = inputData.expenses || [];
+      const sheetExpenses = sheetData.expenses || [];
+
+      if (!cashMatches || !transferMatches || inputExpenses.length !== sheetExpenses.length) return false;
+
+      return inputExpenses.every((expense, index) => {
+        const saved = sheetExpenses[index] || {};
+        return normalizeForCompare(saved.name) === normalizeForCompare(expense.name) &&
+          normalizeForCompare(saved.amount) === normalizeForCompare(expense.amount) &&
+          normalizeForCompare(saved.unit) === normalizeForCompare(expense.unit) &&
+          normalizeForCompare(saved.price) === normalizeForCompare(expense.price);
+      });
+    }
+
+    function wait(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function fetchSheetDataForVerify(dateStr) {
+      const res = await fetch(`${API_URL}?action=getData&date=${encodeURIComponent(dateStr)}&_=${Date.now()}`);
+      const response = await res.json();
+      if (!response || !response.success) throw new Error(response?.error || 'อ่านข้อมูลจาก Google Sheet ไม่สำเร็จ');
+      return response.data;
+    }
+
+    async function verifySavedData(data) {
+      const delays = [700, 1400, 2600];
+      for (const delay of delays) {
+        await wait(delay);
+        const sheetData = await fetchSheetDataForVerify(data.dateStr);
+        if (sheetDataMatches(data, sheetData)) return true;
+      }
+      return false;
+    }
+
+    async function sendToAppsScript(data) {
       const request = {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(data)
       };
 
-      fetch(API_URL, request)
-      .then(res => res.json())
-      .catch(() => fetch(API_URL, { ...request, mode: 'no-cors' }).then(() => ({ success: true, opaque: true })))
-      .then(res => {
+      try {
+        const res = await fetch(API_URL, request);
+        const result = await res.json();
+        if (!result || !result.success) throw new Error(result?.error || 'Apps Script ไม่ยืนยันการบันทึก');
+        return;
+      } catch (error) {
+        await fetch(API_URL, { ...request, mode: 'no-cors' });
+      }
+    }
+
+    async function submitAllData() {
+      const data = gatherData();
+      if (!data.dateStr) return alert("กรุณาเลือกวันที่ก่อนบันทึก");
+      
+      showLoading(true);
+      try {
+        await sendToAppsScript(data);
+        const verified = await verifySavedData(data);
+
         showLoading(false);
-        if (res.success) {
-          localStorage.setItem("submitted_" + data.dateStr, "true");
-          data.isSubmitted = true;
-          db.ref('drafts/' + data.dateStr).set(data);
-          document.getElementById('successModal').classList.remove('hidden');
-        } else {
-          alert('เกิดข้อผิดพลาดในการบันทึก: ' + (res.error || 'ไม่ทราบสาเหตุ'));
+        if (!verified) {
+          alert('ส่งข้อมูลแล้ว แต่ตรวจไม่พบข้อมูลใน Google Sheet กรุณาลองกดบันทึกอีกครั้ง หรือเช็ก Apps Script deployment');
+          return;
         }
-      })
-      .catch(() => {
+
+        localStorage.setItem("submitted_" + data.dateStr, "true");
+        data.isSubmitted = true;
+        db.ref('drafts/' + data.dateStr).set(data);
+        document.getElementById('successModal').classList.remove('hidden');
+      } catch (error) {
         showLoading(false);
-        alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
-      });
+        alert('บันทึกไม่สำเร็จ: ' + (error.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์'));
+      }
     }
 
     function unlockForEdit() {
