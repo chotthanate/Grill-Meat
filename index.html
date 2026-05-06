@@ -369,36 +369,96 @@
       onDateChange();
     }
 
-    function fetchDateData(dateStr) {
+    let activeDateRequestId = 0;
+
+    function setLockScreenState(isLocked) {
+      if (isLocked) document.getElementById('lockScreen').classList.remove('hidden');
+      else document.getElementById('lockScreen').classList.add('hidden');
+    }
+
+    function formHasAnyEntry() {
+      if (document.getElementById('cashInput').value.trim()) return true;
+      if (document.getElementById('transferInput').value.trim()) return true;
+      return Array.from(document.querySelectorAll('#expenseList input'))
+        .some(input => input.value.trim() !== '');
+    }
+
+    function withTimeout(promise, ms, message) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(message)), ms);
+        promise.then(
+          value => {
+            clearTimeout(timer);
+            resolve(value);
+          },
+          error => {
+            clearTimeout(timer);
+            reject(error);
+          }
+        );
+      });
+    }
+
+    async function fetchJsonWithTimeout(url, ms) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ms);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        return await res.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    async function fetchDateData(dateStr) {
+      const requestId = ++activeDateRequestId;
+      const isCurrentRequest = () =>
+        requestId === activeDateRequestId &&
+        document.getElementById('dateInput').value === dateStr;
+
       showLoading(true);
-      db.ref('drafts/' + dateStr).once('value').then((snapshot) => {
-        const draft = snapshot.val();
+      try {
+        let draft = null;
+        try {
+          const snapshot = await withTimeout(
+            db.ref('drafts/' + dateStr).once('value'),
+            5000,
+            'Firebase timeout'
+          );
+          draft = snapshot.val();
+        } catch (error) {
+          console.warn('โหลด draft จาก Firebase ไม่สำเร็จ', error);
+        }
+
+        if (!isCurrentRequest()) return;
+
         if (draft) {
           renderData(draft);
-          showLoading(false);
-          if (draft.isSubmitted) document.getElementById('lockScreen').classList.remove('hidden');
-          else document.getElementById('lockScreen').classList.add('hidden');
-        } else {
-          fetch(`${API_URL}?action=getData&date=${dateStr}`)
-            .then(res => res.json())
-            .then(response => {
-              showLoading(false);
-              if (response && response.success) {
-                renderData(response.data);
-                if (localStorage.getItem("submitted_" + dateStr) === "true") {
-                  document.getElementById('lockScreen').classList.remove('hidden');
-                } else {
-                  document.getElementById('lockScreen').classList.add('hidden');
-                }
-              } else {
-                renderData({expenses: []}); // ถ้าไม่มี ให้รัน 4 บรรทัด
-              }
-            }).catch(() => { 
-              showLoading(false); 
-              renderData({expenses: []});
-            });
+          setLockScreenState(!!draft.isSubmitted);
+          return;
         }
-      });
+
+        renderData({ expenses: [] });
+        setLockScreenState(localStorage.getItem("submitted_" + dateStr) === "true");
+        showLoading(false);
+
+        try {
+          const response = await fetchJsonWithTimeout(
+            `${API_URL}?action=getData&date=${encodeURIComponent(dateStr)}&_=${Date.now()}`,
+            10000
+          );
+          if (!isCurrentRequest()) return;
+
+          if (response && response.success && !formHasAnyEntry()) {
+            renderData(response.data);
+            setLockScreenState(localStorage.getItem("submitted_" + dateStr) === "true");
+          }
+        } catch (error) {
+          console.warn('โหลดข้อมูลจาก Google Sheet ไม่สำเร็จ', error);
+        }
+      } finally {
+        if (isCurrentRequest()) showLoading(false);
+      }
     }
 
     function renderData(data) {
@@ -677,4 +737,5 @@
   </script>
 </body>
 </html>
+
 
