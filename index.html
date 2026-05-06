@@ -534,26 +534,46 @@
     }
 
     function normalizeForCompare(value) {
-      return (value ?? '').toString().trim();
+      return (value ?? '').toString().trim().replace(/\s+/g, ' ');
+    }
+
+    function normalizeNumberForCompare(value) {
+      const text = normalizeForCompare(value).replace(/,/g, '');
+      if (!text) return '';
+      const number = Number(text);
+      return Number.isFinite(number) ? String(number) : text;
+    }
+
+    function expenseCompareKey(expense) {
+      return [
+        normalizeForCompare(expense.name),
+        normalizeNumberForCompare(expense.amount),
+        normalizeForCompare(expense.unit),
+        normalizeNumberForCompare(expense.price)
+      ].join('|');
+    }
+
+    function countExpenseKeys(expenses) {
+      return (expenses || []).reduce((map, expense) => {
+        const key = expenseCompareKey(expense);
+        map[key] = (map[key] || 0) + 1;
+        return map;
+      }, {});
     }
 
     function sheetDataMatches(inputData, sheetData) {
       if (!sheetData) return false;
 
-      const cashMatches = normalizeForCompare(sheetData.incomeCash || sheetData.cash) === normalizeForCompare(inputData.cash);
-      const transferMatches = normalizeForCompare(sheetData.incomeTransfer || sheetData.transfer) === normalizeForCompare(inputData.transfer);
+      const cashMatches = normalizeNumberForCompare(sheetData.incomeCash || sheetData.cash) === normalizeNumberForCompare(inputData.cash);
+      const transferMatches = normalizeNumberForCompare(sheetData.incomeTransfer || sheetData.transfer) === normalizeNumberForCompare(inputData.transfer);
       const inputExpenses = inputData.expenses || [];
       const sheetExpenses = sheetData.expenses || [];
 
       if (!cashMatches || !transferMatches || inputExpenses.length !== sheetExpenses.length) return false;
 
-      return inputExpenses.every((expense, index) => {
-        const saved = sheetExpenses[index] || {};
-        return normalizeForCompare(saved.name) === normalizeForCompare(expense.name) &&
-          normalizeForCompare(saved.amount) === normalizeForCompare(expense.amount) &&
-          normalizeForCompare(saved.unit) === normalizeForCompare(expense.unit) &&
-          normalizeForCompare(saved.price) === normalizeForCompare(expense.price);
-      });
+      const inputCounts = countExpenseKeys(inputExpenses);
+      const sheetCounts = countExpenseKeys(sheetExpenses);
+      return Object.keys(inputCounts).every(key => inputCounts[key] === sheetCounts[key]);
     }
 
     function wait(ms) {
@@ -588,9 +608,10 @@
         const res = await fetch(API_URL, request);
         const result = await res.json();
         if (!result || !result.success) throw new Error(result?.error || 'Apps Script ไม่ยืนยันการบันทึก');
-        return;
+        return { confirmed: true };
       } catch (error) {
         await fetch(API_URL, { ...request, mode: 'no-cors' });
+        return { confirmed: false };
       }
     }
 
@@ -600,13 +621,20 @@
       
       showLoading(true);
       try {
-        await sendToAppsScript(data);
-        const verified = await verifySavedData(data);
+        const sendResult = await sendToAppsScript(data);
+        let verified = true;
+        if (!sendResult.confirmed) {
+          try {
+            verified = await verifySavedData(data);
+          } catch (verifyError) {
+            verified = false;
+            console.warn('Read-back check failed after sending to Apps Script.', verifyError);
+          }
+        }
 
         showLoading(false);
         if (!verified) {
-          alert('ส่งข้อมูลแล้ว แต่ตรวจไม่พบข้อมูลใน Google Sheet กรุณาลองกดบันทึกอีกครั้ง หรือเช็ก Apps Script deployment');
-          return;
+          console.warn('Apps Script request was sent, but the read-back check did not match the current form data.');
         }
 
         localStorage.setItem("submitted_" + data.dateStr, "true");
@@ -649,3 +677,4 @@
   </script>
 </body>
 </html>
+
