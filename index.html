@@ -261,12 +261,12 @@
       <div class="space-y-3">
         <div class="flex flex-col space-y-1">
           <label class="text-xs font-medium text-slate-500">เงินสด</label>
-          <input type="number" id="cashInput" onchange="saveDraftToFirebase()" placeholder="0.00"
+          <input type="number" id="cashInput" oninput="scheduleDraftSave()" onchange="saveDraftToFirebase()" placeholder="0.00"
                  class="input-field text-right font-semibold text-lg">
         </div>
         <div class="flex flex-col space-y-1">
           <label class="text-xs font-medium text-slate-500">เงินโอน</label>
-          <input type="number" id="transferInput" onchange="saveDraftToFirebase()" placeholder="0.00"
+          <input type="number" id="transferInput" oninput="scheduleDraftSave()" onchange="saveDraftToFirebase()" placeholder="0.00"
                  class="input-field text-right font-semibold text-lg">
         </div>
       </div>
@@ -279,7 +279,7 @@
       <div id="expenseList" class="space-y-3"></div>
       
       <div class="flex flex-col gap-3 mt-4 pt-2">
-        <button onclick="addExpenseRow()" class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-indigo-700 rounded-xl border border-slate-200 text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm">
+        <button onclick="addExpenseRowAndSave()" class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-indigo-700 rounded-xl border border-slate-200 text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm">
           <i class="fa-solid fa-plus"></i> เพิ่มบรรทัด
         </button>
         <button onclick="clearAllToday()" class="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border border-red-100 text-sm font-semibold flex items-center justify-center gap-2 transition">
@@ -290,7 +290,7 @@
 
   <div class="submit-dock">
     <div class="submit-dock-inner">
-      <button onclick="submitAllData()" class="submit-button w-full bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition">
+      <button id="submitButton" onclick="submitAllData()" class="submit-button w-full bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition">
         🚀 ส่งยอดเข้า Google Sheet
       </button>
     </div>
@@ -370,10 +370,28 @@
     }
 
     let activeDateRequestId = 0;
+    let draftSaveTimer = null;
+    let sheetLookupStatus = 'ready';
+    const LOCAL_BACKUP_KEY = 'grill_meat_local_backups';
+    const LOCAL_BACKUP_LIMIT = 7;
 
     function setLockScreenState(isLocked) {
       if (isLocked) document.getElementById('lockScreen').classList.remove('hidden');
       else document.getElementById('lockScreen').classList.add('hidden');
+    }
+
+    function setSheetLookupStatus(status) {
+      sheetLookupStatus = status;
+      const button = document.getElementById('submitButton');
+      if (!button) return;
+
+      const isLoading = status === 'loading';
+      button.disabled = isLoading;
+      button.classList.toggle('opacity-60', isLoading);
+      button.classList.toggle('cursor-not-allowed', isLoading);
+      button.innerHTML = isLoading
+        ? '<i class="fa-solid fa-spinner fa-spin"></i> กำลังตรวจข้อมูลเดิม...'
+        : '🚀 ส่งยอดเข้า Google Sheet';
     }
 
     function formHasAnyEntry() {
@@ -410,6 +428,48 @@
       }
     }
 
+    function getLocalBackups() {
+      try {
+        return JSON.parse(localStorage.getItem(LOCAL_BACKUP_KEY) || '{}');
+      } catch (error) {
+        console.warn('อ่าน local backup ไม่สำเร็จ', error);
+        return {};
+      }
+    }
+
+    function saveLocalBackup(data) {
+      if (!data || !data.dateStr) return;
+      const backups = getLocalBackups();
+      backups[data.dateStr] = {
+        ...data,
+        savedAt: Date.now()
+      };
+
+      Object.keys(backups)
+        .sort((a, b) => (backups[b].savedAt || 0) - (backups[a].savedAt || 0))
+        .slice(LOCAL_BACKUP_LIMIT)
+        .forEach(date => delete backups[date]);
+
+      localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(backups));
+    }
+
+    function getLocalBackup(dateStr) {
+      return getLocalBackups()[dateStr] || null;
+    }
+
+    function clearLocalBackup(dateStr) {
+      const backups = getLocalBackups();
+      if (backups[dateStr]) {
+        delete backups[dateStr];
+        localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(backups));
+      }
+    }
+
+    function scheduleDraftSave() {
+      clearTimeout(draftSaveTimer);
+      draftSaveTimer = setTimeout(() => saveDraftToFirebase(), 900);
+    }
+
     async function fetchDateData(dateStr) {
       const requestId = ++activeDateRequestId;
       const isCurrentRequest = () =>
@@ -417,6 +477,7 @@
         document.getElementById('dateInput').value === dateStr;
 
       showLoading(true);
+      setSheetLookupStatus('loading');
       try {
         let draft = null;
         try {
@@ -435,6 +496,15 @@
         if (draft) {
           renderData(draft);
           setLockScreenState(!!draft.isSubmitted);
+          setSheetLookupStatus('ready');
+          return;
+        }
+
+        const localBackup = getLocalBackup(dateStr);
+        if (localBackup) {
+          renderData(localBackup);
+          setLockScreenState(!!localBackup.isSubmitted);
+          setSheetLookupStatus('ready');
           return;
         }
 
@@ -453,8 +523,10 @@
             renderData(response.data);
             setLockScreenState(localStorage.getItem("submitted_" + dateStr) === "true");
           }
+          setSheetLookupStatus('ready');
         } catch (error) {
           console.warn('โหลดข้อมูลจาก Google Sheet ไม่สำเร็จ', error);
+          setSheetLookupStatus('failed');
         }
       } finally {
         if (isCurrentRequest()) showLoading(false);
@@ -488,20 +560,20 @@
       div.innerHTML = `
         <div class="grid grid-cols-12 gap-1 w-full">
           <div class="col-span-5 relative">
-            <input type="text" value="${name}" oninput="handleSearchDropdown(this)" onkeydown="checkNextFocus(event, this, 'amount')" onchange="saveDraftToFirebase()"
+            <input type="text" value="${name}" oninput="handleSearchDropdown(this); scheduleDraftSave()" onkeydown="checkNextFocus(event, this, 'amount')" onchange="saveDraftToFirebase()"
                    placeholder="รายการ" class="input-field px-2">
             <div class="dropdown-list hidden"></div>
           </div>
           <div class="col-span-2">
-            <input type="number" value="${amount}" onkeydown="checkNextFocus(event, this, 'unit')" onchange="saveDraftToFirebase()"
+            <input type="number" value="${amount}" oninput="scheduleDraftSave()" onkeydown="checkNextFocus(event, this, 'unit')" onchange="saveDraftToFirebase()"
                    placeholder="จำนวน" class="input-field px-1 text-center">
           </div>
           <div class="col-span-2">
-            <input type="text" value="${unit}" onkeydown="checkNextFocus(event, this, 'price')" onchange="saveDraftToFirebase()"
+            <input type="text" value="${unit}" oninput="scheduleDraftSave()" onkeydown="checkNextFocus(event, this, 'price')" onchange="saveDraftToFirebase()"
                    placeholder="หน่วย" class="input-field px-1 text-center">
           </div>
           <div class="col-span-3">
-            <input type="number" value="${price}" onkeydown="checkNextFocus(event, this, 'nextRow')" onchange="saveDraftToFirebase()"
+            <input type="number" value="${price}" oninput="scheduleDraftSave()" onkeydown="checkNextFocus(event, this, 'nextRow')" onchange="saveDraftToFirebase()"
                    placeholder="บาท" class="input-field px-2 text-right font-semibold">
           </div>
         </div>
@@ -510,6 +582,11 @@
         </button>
       `;
       container.appendChild(div);
+    }
+
+    function addExpenseRowAndSave() {
+      addExpenseRow();
+      saveDraftToFirebase();
     }
 
     function removeRow(rowId) {
@@ -552,6 +629,7 @@
           if (nextRowContainer) nextRowContainer.querySelector('input[placeholder="รายการ"]').focus();
           else {
             addExpenseRow();
+            saveDraftToFirebase();
             setTimeout(() => { document.getElementById('expenseList').lastElementChild.querySelector('input[placeholder="รายการ"]').focus(); }, 50);
           }
         }
@@ -567,6 +645,9 @@
         
         const dateStr = document.getElementById('dateInput').value;
         db.ref('drafts/' + dateStr).remove();
+        clearLocalBackup(dateStr);
+        localStorage.removeItem("submitted_" + dateStr);
+        setLockScreenState(false);
       }
     }
 
@@ -585,12 +666,35 @@
       return { dateStr, cash, transfer, expenses };
     }
 
+    function validateBeforeSubmit() {
+      const rows = Array.from(document.querySelectorAll('#expenseList > div'));
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const nameInput = row.querySelector('input[placeholder="รายการ"]');
+        const name = nameInput.value.trim();
+        const amount = row.querySelector('input[placeholder="จำนวน"]').value.trim();
+        const unit = row.querySelector('input[placeholder="หน่วย"]').value.trim();
+        const price = row.querySelector('input[placeholder="บาท"]').value.trim();
+
+        if (!name && (amount || unit || price)) {
+          nameInput.focus();
+          alert(`รายจ่ายบรรทัดที่ ${i + 1} มีข้อมูลแล้ว แต่ยังไม่มีชื่อรายการ`);
+          return false;
+        }
+      }
+      return true;
+    }
+
     function saveDraftToFirebase() {
+      clearTimeout(draftSaveTimer);
       const data = gatherData();
       if (!data.dateStr) return;
       const isLocked = !document.getElementById('lockScreen').classList.contains('hidden');
       data.isSubmitted = isLocked;
-      db.ref('drafts/' + data.dateStr).set(data);
+      saveLocalBackup(data);
+      return db.ref('drafts/' + data.dateStr).set(data).catch(error => {
+        console.warn('บันทึก draft ไป Firebase ไม่สำเร็จ แต่เก็บ local backup ไว้แล้ว', error);
+      });
     }
 
     function normalizeForCompare(value) {
@@ -641,8 +745,10 @@
     }
 
     async function fetchSheetDataForVerify(dateStr) {
-      const res = await fetch(`${API_URL}?action=getData&date=${encodeURIComponent(dateStr)}&_=${Date.now()}`);
-      const response = await res.json();
+      const response = await fetchJsonWithTimeout(
+        `${API_URL}?action=getData&date=${encodeURIComponent(dateStr)}&_=${Date.now()}`,
+        15000
+      );
       if (!response || !response.success) throw new Error(response?.error || 'อ่านข้อมูลจาก Google Sheet ไม่สำเร็จ');
       return response.data;
     }
@@ -667,22 +773,41 @@
       try {
         const res = await fetch(API_URL, request);
         const result = await res.json();
-        if (!result || !result.success) throw new Error(result?.error || 'Apps Script ไม่ยืนยันการบันทึก');
+        if (!result || !result.success) {
+          const appsScriptError = new Error(result?.error || 'Apps Script ไม่ยืนยันการบันทึก');
+          appsScriptError.confirmedFailure = true;
+          throw appsScriptError;
+        }
         return { confirmed: true };
       } catch (error) {
+        if (error.confirmedFailure) throw error;
         await fetch(API_URL, { ...request, mode: 'no-cors' });
         return { confirmed: false };
       }
     }
 
     async function submitAllData() {
+      clearTimeout(draftSaveTimer);
+      if (sheetLookupStatus === 'loading') {
+        alert('กำลังตรวจข้อมูลเดิมจาก Google Sheet กรุณารอสักครู่ก่อนส่งข้อมูล');
+        return;
+      }
+
+      if (sheetLookupStatus === 'failed') {
+        const shouldContinue = confirm('ยังโหลดข้อมูลเดิมจาก Google Sheet ไม่สำเร็จ ถ้าวันนี้เคยมีข้อมูลอยู่แล้ว การส่งตอนนี้อาจทับข้อมูลเดิม ต้องการส่งต่อหรือไม่?');
+        if (!shouldContinue) return;
+      }
+
+      if (!validateBeforeSubmit()) return;
+
       const data = gatherData();
       if (!data.dateStr) return alert("กรุณาเลือกวันที่ก่อนบันทึก");
+      saveLocalBackup(data);
       
       showLoading(true);
       try {
         const sendResult = await sendToAppsScript(data);
-        let verified = true;
+        let verified = sendResult.confirmed;
         if (!sendResult.confirmed) {
           try {
             verified = await verifySavedData(data);
@@ -695,11 +820,16 @@
         showLoading(false);
         if (!verified) {
           console.warn('Apps Script request was sent, but the read-back check did not match the current form data.');
+          alert('ส่งคำขอไปแล้ว แต่เว็บยังยืนยันไม่ได้ว่าข้อมูลเข้า Google Sheet ครบถ้วน ข้อมูลยังถูกเก็บเป็นฉบับร่างไว้ กรุณาเช็ค Google Sheet หรือกดส่งอีกครั้ง');
+          return;
         }
 
         localStorage.setItem("submitted_" + data.dateStr, "true");
         data.isSubmitted = true;
-        db.ref('drafts/' + data.dateStr).set(data);
+        saveLocalBackup(data);
+        await db.ref('drafts/' + data.dateStr).set(data).catch(error => {
+          console.warn('ส่งเข้า Sheet สำเร็จ แต่บันทึกสถานะกลับ Firebase ไม่สำเร็จ', error);
+        });
         document.getElementById('successModal').classList.remove('hidden');
       } catch (error) {
         showLoading(false);
@@ -710,7 +840,14 @@
     function unlockForEdit() {
       const dateStr = document.getElementById('dateInput').value;
       localStorage.removeItem("submitted_" + dateStr);
-      db.ref('drafts/' + dateStr).update({ isSubmitted: false });
+      const backup = getLocalBackup(dateStr);
+      if (backup) {
+        backup.isSubmitted = false;
+        saveLocalBackup(backup);
+      }
+      db.ref('drafts/' + dateStr).update({ isSubmitted: false }).catch(error => {
+        console.warn('ปลดล็อคใน Firebase ไม่สำเร็จ แต่ปลดล็อคในเครื่องแล้ว', error);
+      });
       document.getElementById('lockScreen').classList.add('hidden');
     }
 
@@ -737,5 +874,6 @@
   </script>
 </body>
 </html>
+
 
 
